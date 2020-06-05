@@ -2,6 +2,8 @@ import csv
 import requests
 import datetime
 import os
+import logging
+
 from collections import OrderedDict
 
 from airflow import DAG
@@ -48,6 +50,11 @@ load_csv_op = PythonOperator(
 
 
 def load_transactions_operations():
+
+    LOGGER = logging.getLogger("airflow.task")
+    LOGGER.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
+    print('oppop')
+
     url = 'https://api.jsonbin.io/b/5ed7391379382f568bd22822'
     response = requests.get(url)
     response.raise_for_status()
