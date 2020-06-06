@@ -3,15 +3,23 @@ import requests
 import datetime
 import os
 import logging
-import psycopg2
+from pathlib import Path
+
+from psycopg2.extras import DictCursor
+
 from collections import OrderedDict
 
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.postgres_hook import PostgresHook
 
-TRANSACTIONS_FILE_NAME = 'transactions.csv'
-ORDERS_FILE_NAME = 'orders.csv'
+
+DIR_FOR_CSV_FILES = Path.joinpath(Path.cwd(), 'data')
+TRANSACTIONS_FILE_NAME = Path.joinpath(DIR_FOR_CSV_FILES, 'transactions.csv')
+ORDERS_FILE_NAME = Path.joinpath(DIR_FOR_CSV_FILES, 'orders.csv')
+GOODS_FILE_NAME = Path.joinpath(DIR_FOR_CSV_FILES, 'goods.csv')
+CUSTOMERS_FILE_NAME = Path.joinpath(DIR_FOR_CSV_FILES, 'customers.csv')
+
 
 default_args = {
     'owner': 'dimk',
@@ -21,6 +29,15 @@ default_args = {
 dag = DAG(dag_id='data_collector',
           schedule_interval='0 * * * * *',
           default_args=default_args)
+
+
+def write_csv(table_headers, table_data, file_name):
+    with open(file_name, 'w+',  newline="", encoding='utf-8') as file:
+        columns = table_headers
+        writer = csv.DictWriter(file, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(OrderedDict((frozenset(row.items()), row)
+                                     for row in table_data).values())
 
 
 def load_orders_csv():
@@ -50,6 +67,7 @@ load_csv_op = PythonOperator(
 )
 
 
+
 def load_transactions_operations():
 
     url = 'https://api.jsonbin.io/b/5ed7391379382f568bd22822'
@@ -66,12 +84,8 @@ def load_transactions_operations():
                 'transaction_uuid': transaction,
                 'transaction_status': status
             })
-    with open(TRANSACTIONS_FILE_NAME, 'w+',  newline="", encoding='utf-8') as file:
-        columns = ['transaction_uuid', 'transaction_status']
-        writer = csv.DictWriter(file, fieldnames=columns)
-        writer.writeheader()
-        writer.writerows(OrderedDict((frozenset(transaction.items()), transaction)
-                                     for transaction in seen_transactions).values())
+    write_csv(['transaction_uuid', 'transaction_status'],
+              seen_transactions, TRANSACTIONS_FILE_NAME)
 
 
 load_transactions_operations_op = PythonOperator(
@@ -81,25 +95,33 @@ load_transactions_operations_op = PythonOperator(
 )
 
 
-def load_goods():
+def get_table_data(table):
+    result_table = []
+    headers = list(table[0].keys())
+    for raw in table:
+        cell = {}
+        for field in headers:
+            if raw[field] is None or raw[field] == '':
+                break
+            cell[field] = raw[field]
+        if len(cell) == len(headers):
+            result_table.append(cell)
+    return headers, result_table
 
-    request = 'SELECT * FROM goods'
-    conn = psycopg2.connect(
-        "dbname=postgres user=shop password=1ec4fae2cb7a90b6b25736d0fa5ff9590e11406 host=109.234.36.184 port=5432")
-    cur = conn.cursor()
-    cur.execute(request)
-    goods = cur.fetchall()
-    for good in goods[:1]:
-        print(goods)
-    # pg_hook = PostgresHook(
-    #     postgre_conn_id='postgres_goods_customers',
-    # )
-    # connection = pg_hook.get_conn()
-    # cursor = connection.Cursor()
-    # cursor.execute(request)
-    # goods = cursor.fetchall()
-    # for good in goods:
-    #     print(goods)
+
+def load_postgres_data(table_name, file_name):
+    request = f'SELECT * FROM {table_name}'
+    with PostgresHook(
+            postgres_conn_id='postgres_goods_customers',
+            schema='postgres').get_conn() as connection:
+        with connection.cursor(cursor_factory=DictCursor) as cursor:
+            cursor.execute(request)
+            headers, result_table = get_table_data(cursor.fetchall())
+            write_csv(headers, result_table, file_name)
+
+
+def load_goods():
+    load_postgres_data('goods', GOODS_FILE_NAME)
 
 
 load_goods_op = PythonOperator(
@@ -109,4 +131,15 @@ load_goods_op = PythonOperator(
 )
 
 
-load_csv_op >> load_transactions_operations_op >> load_goods_op
+def load_customers():
+    load_postgres_data('customers', CUSTOMERS_FILE_NAME)
+
+
+load_customers_op = PythonOperator(
+    task_id='load_customers_op',
+    python_callable=load_customers,
+    dag=dag,
+)
+
+
+load_csv_op >> load_transactions_operations_op >> load_goods_op >> load_customers_op
