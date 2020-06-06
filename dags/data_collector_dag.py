@@ -3,6 +3,9 @@ import requests
 import datetime
 import os
 import logging
+
+
+from dateutil import relativedelta
 from pathlib import Path
 
 from psycopg2.extras import DictCursor
@@ -165,10 +168,16 @@ def save_data():
     orders = csv_dict_reader(ORDERS_FILE_NAME, 'uuid заказа')
     customers = csv_dict_reader(CUSTOMERS_FILE_NAME, 'email')
 
+    today = datetime.datetime.today()
+
     result_data_set = []
     for uuid_order, order in orders.items():
         customer_email = order['email']
-        customer_age = customers[customer_email]['birth_date']
+
+        customer_birth_date = customers[customer_email]['birth_date']
+        customer_age = relativedelta.relativedelta(
+            today, datetime.datetime.strptime(customer_birth_date, '%Y-%m-%d')).years
+
         customer_name = customers[customer_email]['name']
         last_modified_at = order['дата заказа']
         good_title = order['название товара']
