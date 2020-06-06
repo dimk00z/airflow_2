@@ -3,11 +3,12 @@ import requests
 import datetime
 import os
 import logging
-
+import psycopg2
 from collections import OrderedDict
 
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
+from airflow.hooks.postgres_hook import PostgresHook
 
 TRANSACTIONS_FILE_NAME = 'transactions.csv'
 ORDERS_FILE_NAME = 'orders.csv'
@@ -51,10 +52,6 @@ load_csv_op = PythonOperator(
 
 def load_transactions_operations():
 
-    LOGGER = logging.getLogger("airflow.task")
-    LOGGER.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
-    print('oppop')
-
     url = 'https://api.jsonbin.io/b/5ed7391379382f568bd22822'
     response = requests.get(url)
     response.raise_for_status()
@@ -84,4 +81,32 @@ load_transactions_operations_op = PythonOperator(
 )
 
 
-load_csv_op >> load_transactions_operations_op
+def load_goods():
+
+    request = 'SELECT * FROM goods'
+    conn = psycopg2.connect(
+        "dbname=postgres user=shop password=1ec4fae2cb7a90b6b25736d0fa5ff9590e11406 host=109.234.36.184 port=5432")
+    cur = conn.cursor()
+    cur.execute(request)
+    goods = cur.fetchall()
+    for good in goods[:1]:
+        print(goods)
+    # pg_hook = PostgresHook(
+    #     postgre_conn_id='postgres_goods_customers',
+    # )
+    # connection = pg_hook.get_conn()
+    # cursor = connection.Cursor()
+    # cursor.execute(request)
+    # goods = cursor.fetchall()
+    # for good in goods:
+    #     print(goods)
+
+
+load_goods_op = PythonOperator(
+    task_id='load_goods_op',
+    python_callable=load_goods,
+    dag=dag,
+)
+
+
+load_csv_op >> load_transactions_operations_op >> load_goods_op
