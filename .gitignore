@@ -130,3 +130,4 @@ logs
 *.db*
 *.cfg
 *.jpg
+commands.md
