@@ -8,6 +8,7 @@ from pathlib import Path
 from psycopg2.extras import DictCursor
 from collections import OrderedDict
 from airflow import DAG
+from airflow.utils.dates import days_ago
 from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.postgres_hook import PostgresHook
 
@@ -22,7 +23,11 @@ FINAL_DATASET_FILE_NAME = f'{DIR_FOR_CSV_FILES}final_dataset.csv'
 
 default_args = {
     'owner': 'dimk',
-    'start_date': datetime.datetime(2020, 6, 6),
+    'depends_on_past': False,
+    'start_date': days_ago(2),
+    'email': ['airflow@example.com'],
+    'retries': 2,
+    'retry_delay': timedelta(minutes=5),
 }
 
 dag = DAG(dag_id='data_collector',
