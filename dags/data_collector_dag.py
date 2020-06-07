@@ -39,7 +39,7 @@ def write_csv(table_headers, table_data, file_name):
                                      for row in table_data).values())
 
 
-def load_orders_csv():
+def load_orders_csv(**kwargs):
     url = 'https://airflow101.python-jitsu.club/orders.csv'
     temp_file_name = 'temp.csv'
     response = requests.get(url)
@@ -56,7 +56,7 @@ def load_orders_csv():
     os.remove(temp_file_name)
 
 
-def load_transactions_operations():
+def load_transactions_operations(**kwargs):
     url = 'https://api.jsonbin.io/b/5ed7391379382f568bd22822'
     response = requests.get(url)
     response.raise_for_status()
@@ -99,7 +99,7 @@ def load_postgres_table(table_name, file_name):
             write_csv(headers, result_table, file_name)
 
 
-def load_from_postgres():
+def load_from_postgres(**kwargs):
     load_postgres_table('goods', GOODS_FILE_NAME)
     load_postgres_table('customers', CUSTOMERS_FILE_NAME)
 
@@ -149,7 +149,7 @@ def create_final_dataset():
     write_csv(headers, result_data_set, FINAL_DATASET_FILE_NAME)
 
 
-def save_data():
+def save_data(**kwargs):
     create_final_dataset()
     table_name = 'home_work_2_data_set'
     check_request = f"""
