@@ -12,17 +12,17 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.hooks.postgres_hook import PostgresHook
 
 
-DIR_FOR_CSV_FILES = Path.joinpath(Path.cwd(), 'data')
-TRANSACTIONS_FILE_NAME = Path.joinpath(DIR_FOR_CSV_FILES, 'transactions.csv')
-ORDERS_FILE_NAME = Path.joinpath(DIR_FOR_CSV_FILES, 'orders.csv')
-GOODS_FILE_NAME = Path.joinpath(DIR_FOR_CSV_FILES, 'goods.csv')
-CUSTOMERS_FILE_NAME = Path.joinpath(DIR_FOR_CSV_FILES, 'customers.csv')
-FINAL_DATASET_FILE_NAME = Path.joinpath(DIR_FOR_CSV_FILES, 'final_dataset.csv')
+DIR_FOR_CSV_FILES = '/home/dimk/airflow/data/'
+TRANSACTIONS_FILE_NAME = f'{DIR_FOR_CSV_FILES}transactions.csv'
+ORDERS_FILE_NAME = f'{DIR_FOR_CSV_FILES}orders.csv'
+GOODS_FILE_NAME = f'{DIR_FOR_CSV_FILES}goods.csv'
+CUSTOMERS_FILE_NAME = f'{DIR_FOR_CSV_FILES}customers.csv'
+FINAL_DATASET_FILE_NAME = f'{DIR_FOR_CSV_FILES}final_dataset.csv'
 
 
 default_args = {
     'owner': 'dimk',
-    'start_date': datetime.datetime(2020, 6, 1),
+    'start_date': datetime.datetime(2020, 6, 6),
 }
 
 dag = DAG(dag_id='data_collector',
@@ -136,9 +136,7 @@ def create_final_dataset():
         else:
             row['age'] = None
             row['name'] = order['ФИО']
-        #row['last_modified_at'] = int(datetime.datetime.now().timestamp())
         row['last_modified_at'] = datetime.datetime.now()
-
         row['good_title'] = order['название товара']
         row['date'] = order['дата заказа']
         row['amount'] = int(order['количество'])
@@ -152,6 +150,9 @@ def create_final_dataset():
 def save_data(**kwargs):
     create_final_dataset()
     table_name = 'home_work_2_data_set'
+    columns = ['uuid', 'name', 'age', 'good_title', 'date',
+               'payment_status', 'total_price', 'amount', 'last_modified_at']
+
     check_request = f"""
             SELECT *
             FROM information_schema.tables
@@ -174,18 +175,33 @@ def save_data(**kwargs):
         connection.autocommit = True
         with connection.cursor(cursor_factory=DictCursor) as cursor:
             # cursor.execute(drop_table_request)
+
             check_table = cursor.execute(check_request)
             if not bool(cursor.rowcount):
+                # создание таблицы и загрузка из файла
                 cursor.execute(create_request)
-            with open(FINAL_DATASET_FILE_NAME, "r") as f:
-                reader = csv.reader(f)
-                next(reader)
-                columns = (
-                    'uuid', 'name', 'age', 'good_title', 'date',
-                    'payment_status', 'total_price', 'amount', 'last_modified_at',
-                )
-                cursor.copy_from(
-                    f, table_name, columns=columns, sep=",", null='')
+                with open(FINAL_DATASET_FILE_NAME, "r") as f:
+                    reader = csv.reader(f)
+                    next(reader)
+                    cursor.copy_from(
+                        f, table_name, columns=columns, sep=",", null='')
+            else:
+                # при наличии таблицы в базе происходит добавление/обновление элементов
+                final_data_set = csv_dict_reader(
+                    FINAL_DATASET_FILE_NAME, 'uuid')
+                fields = (',').join(columns)
+                for uuid, data in final_data_set.items():
+                    age = data['age'] if data['age'] else 'NULL'
+                    values = f"""'{uuid}', '{data['name']}', {age}, '{data['good_title']}', '{data['date']}',
+    '{data['payment_status']}', {data['total_price']}, {data['amount']}, '{data['last_modified_at']}'
+                    """
+                    values_for_update = ', '.join(
+                        [f'{key} = EXCLUDED.{key}' for key in data if key != 'uuid'])
+                    insert_update_request = f"""
+    INSERT INTO {table_name} ({fields})
+    VALUES ({values})
+    ON CONFLICT (uuid) DO UPDATE SET {values_for_update}"""
+                    cursor.execute(insert_update_request)
 
 
 load_csv_op = PythonOperator(
