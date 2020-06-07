@@ -14,12 +14,16 @@ from airflow.hooks.postgres_hook import PostgresHook
 
 
 DIR_FOR_CSV_FILES = '/home/dimk/airflow/data/'
-TRANSACTIONS_FILE_NAME = f'{DIR_FOR_CSV_FILES}transactions.csv'
-ORDERS_FILE_NAME = f'{DIR_FOR_CSV_FILES}orders.csv'
-GOODS_FILE_NAME = f'{DIR_FOR_CSV_FILES}goods.csv'
-CUSTOMERS_FILE_NAME = f'{DIR_FOR_CSV_FILES}customers.csv'
-FINAL_DATASET_FILE_NAME = f'{DIR_FOR_CSV_FILES}final_dataset.csv'
 
+
+FILE_NAMES = {
+    'transactions': f'{DIR_FOR_CSV_FILES}transactions.csv',
+    'orders': f'{DIR_FOR_CSV_FILES}orders.csv',
+    'goods': f'{DIR_FOR_CSV_FILES}goods.csv',
+    'temp': f'{DIR_FOR_CSV_FILES}temp.csv',
+    'customers': f'{DIR_FOR_CSV_FILES}customers.csv',
+    'final_dataset': f'{DIR_FOR_CSV_FILES}final_dataset.csv'
+}
 
 default_args = {
     'owner': 'dimk',
@@ -46,19 +50,18 @@ def write_csv(table_headers, table_data, file_name):
 
 def load_orders_csv(**kwargs):
     url = 'https://airflow101.python-jitsu.club/orders.csv'
-    temp_file_name = 'temp.csv'
     response = requests.get(url)
     response.raise_for_status()
-    with open(temp_file_name, 'wb') as file:
+    with open(FILE_NAMES['temp'], 'wb') as file:
         file.write(response.content)
-    with open(temp_file_name, 'r') as in_file, open(ORDERS_FILE_NAME, 'w') as out_file:
+    with open(FILE_NAMES['temp'], 'r') as in_file, open(FILE_NAMES['orders'], 'w') as out_file:
         seen = set()
         for line in in_file:
             if line in seen:
                 continue
             seen.add(line)
             out_file.write(line)
-    os.remove(temp_file_name)
+    os.remove(FILE_NAMES['temp'])
 
 
 def load_transactions_operations(**kwargs):
@@ -76,7 +79,7 @@ def load_transactions_operations(**kwargs):
                 'transaction_status': status
             })
     write_csv(['transaction_uuid', 'transaction_status'],
-              seen_transactions, TRANSACTIONS_FILE_NAME)
+              seen_transactions, FILE_NAMES['transactions'])
 
 
 def get_table_data(table):
@@ -105,8 +108,8 @@ def load_postgres_table(table_name, file_name):
 
 
 def load_from_postgres(**kwargs):
-    load_postgres_table('goods', GOODS_FILE_NAME)
-    load_postgres_table('customers', CUSTOMERS_FILE_NAME)
+    load_postgres_table('goods', FILE_NAMES['goods'])
+    load_postgres_table('customers', FILE_NAMES['customers'])
 
 
 def csv_dict_reader(file_name, key_field):
@@ -120,10 +123,11 @@ def csv_dict_reader(file_name, key_field):
 
 def create_final_dataset():
 
-    transactions = csv_dict_reader(TRANSACTIONS_FILE_NAME, 'transaction_uuid')
-    goods = csv_dict_reader(GOODS_FILE_NAME, 'name')
-    orders = csv_dict_reader(ORDERS_FILE_NAME, 'uuid заказа')
-    customers = csv_dict_reader(CUSTOMERS_FILE_NAME, 'email')
+    transactions = csv_dict_reader(
+        FILE_NAMES['transactions'], 'transaction_uuid')
+    goods = csv_dict_reader(FILE_NAMES['goods'], 'name')
+    orders = csv_dict_reader(FILE_NAMES['orders'], 'uuid заказа')
+    customers = csv_dict_reader(FILE_NAMES['customers'], 'email')
 
     today = datetime.datetime.today()
     headers = ['uuid', 'name', 'age', 'good_title', 'date',
@@ -149,7 +153,7 @@ def create_final_dataset():
             row['amount'] * float(goods[order['название товара']]['price']), 2)
         row['payment_status'] = transactions[uuid_order]['transaction_status']
         result_data_set.append(row)
-    write_csv(headers, result_data_set, FINAL_DATASET_FILE_NAME)
+    write_csv(headers, result_data_set, FILE_NAMES['final_dataset'])
 
 
 def save_data(**kwargs):
@@ -185,7 +189,7 @@ def save_data(**kwargs):
             if not bool(cursor.rowcount):
                 # создание таблицы и загрузка из файла
                 cursor.execute(create_request)
-                with open(FINAL_DATASET_FILE_NAME, "r") as f:
+                with open(FILE_NAMES['final_dataset'], "r") as f:
                     reader = csv.reader(f)
                     next(reader)
                     cursor.copy_from(
@@ -193,8 +197,9 @@ def save_data(**kwargs):
             else:
                 # при наличии таблицы в базе происходит добавление/обновление элементов
                 final_data_set = csv_dict_reader(
-                    FINAL_DATASET_FILE_NAME, 'uuid')
+                    FILE_NAMES['final_dataset'], 'uuid')
                 fields = (',').join(columns)
+                insert_update_requests = ''
                 for uuid, data in final_data_set.items():
                     age = data['age'] if data['age'] else 'NULL'
                     values = f"""'{uuid}', '{data['name']}', {age}, '{data['good_title']}', '{data['date']}',
@@ -205,8 +210,10 @@ def save_data(**kwargs):
                     insert_update_request = f"""
     INSERT INTO {table_name} ({fields})
     VALUES ({values})
-    ON CONFLICT (uuid) DO UPDATE SET {values_for_update}"""
-                    cursor.execute(insert_update_request)
+    ON CONFLICT (uuid) DO UPDATE SET {values_for_update};"""
+                    insert_update_requests = '\n'.join(
+                        (insert_update_requests, insert_update_request))
+                cursor.execute(insert_update_requests)
 
 
 load_csv_op = PythonOperator(
