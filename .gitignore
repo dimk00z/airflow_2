@@ -128,4 +128,5 @@ logs
 *.csv
 *.pid
 *.db*
-*tests.cfg
+*.cfg
+*.jpg
