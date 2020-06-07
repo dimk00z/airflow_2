@@ -190,24 +190,28 @@ def save_data():
 
 load_csv_op = PythonOperator(
     task_id='load_csv_op',
+    provide_context=True,
     python_callable=load_orders_csv,
     dag=dag,
 )
 
 load_transactions_operations_op = PythonOperator(
     task_id='load_transactions_operations_op',
+    provide_context=True,
     python_callable=load_transactions_operations,
     dag=dag,
 )
 
 load_from_postgres_op = PythonOperator(
     task_id='load_from_postgres_op',
+    provide_context=True,
     python_callable=load_from_postgres,
     dag=dag,
 )
 
 save_data_op = PythonOperator(
     task_id='save_data_op',
+    provide_context=True,
     python_callable=save_data,
     dag=dag,
 )
