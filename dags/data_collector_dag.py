@@ -27,7 +27,7 @@ default_args = {
     'start_date': days_ago(2),
     'email': ['airflow@example.com'],
     'retries': 2,
-    'retry_delay': timedelta(minutes=5),
+    'retry_delay': datetime.timedelta(minutes=5),
 }
 
 dag = DAG(dag_id='data_collector',
