@@ -2,7 +2,7 @@
 
 ## Вторая домашняя работа
 
-Скрипт data_collector_dag.py (https://github.com/dimk00z/airflow_2/blob/master/dags/data_collector_dag.py) содержит четыре таска:
+Скрипт [data_collector_dag.py](https://github.com/dimk00z/airflow_2/blob/master/dags/data_collector_dag.py) содержит четыре таска:
 
 1. `load_csv_op` загружает данные по заказам
 
