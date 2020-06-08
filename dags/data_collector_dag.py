@@ -14,16 +14,10 @@ from airflow.hooks.postgres_hook import PostgresHook
 
 
 DIR_FOR_CSV_FILES = '/home/dimk/airflow/data/'
+FILES = ['transactions', 'orders', 'goods',
+         'temp', 'customers', 'final_dataset']
+FILE_NAMES = {key: f'{DIR_FOR_CSV_FILES}{key}.csv' for key in FILES}
 
-
-FILE_NAMES = {
-    'transactions': f'{DIR_FOR_CSV_FILES}transactions.csv',
-    'orders': f'{DIR_FOR_CSV_FILES}orders.csv',
-    'goods': f'{DIR_FOR_CSV_FILES}goods.csv',
-    'temp': f'{DIR_FOR_CSV_FILES}temp.csv',
-    'customers': f'{DIR_FOR_CSV_FILES}customers.csv',
-    'final_dataset': f'{DIR_FOR_CSV_FILES}final_dataset.csv'
-}
 
 default_args = {
     'owner': 'dimk',
